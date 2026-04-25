@@ -6,7 +6,7 @@
   "scripts": {
   "start": "node preferans.js",
   "dev": "nodemon server.js"
-},"
+},
   },
   "dependencies": {
     "express": "^4.18.2",
