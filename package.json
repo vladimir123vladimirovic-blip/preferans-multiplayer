@@ -2,11 +2,10 @@
   "name": "preferans-realtime",
   "version": "1.0.0",
   "description": "Real-time Preferans card game",
-  "main": "server.js",
+  "main": "preferans.js",
   "scripts": {
-  "start": "node preferans.js",
-  "dev": "nodemon server.js"
-},
+    "start": "node preferans.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
