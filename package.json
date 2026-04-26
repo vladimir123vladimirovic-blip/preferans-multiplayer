@@ -1,19 +1,19 @@
 {
-  "name": "preferans-realtime",
+  "name": "preferans-multiplayer",
   "version": "1.0.0",
-  "description": "Real-time Preferans card game",
+  "description": "Preferans online multiplayer",
   "main": "preferans.js",
   "scripts": {
     "start": "node preferans.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon preferans.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.6.1"
-    "mongoose": "^7.0.0",
+    "socket.io": "^4.6.1",
+    "mongoose": "^7.6.3",
     "bcryptjs": "^2.4.3"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
+  "engines": {
+    "node": ">=16.0.0"
   }
 }
