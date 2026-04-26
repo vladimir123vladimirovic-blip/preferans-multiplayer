@@ -3,425 +3,500 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Preferans - Vladimir</title>
+  <title>Preferans Portal</title>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <style>
-    /* OSNOVNI STIL */
-    body {
-      font-family: 'Segoe UI', Tahoma, sans-serif;
-      background-color: #1a472a; /* TAmno zelena pozadina stola */
-      color: white;
-      margin: 0;
-      overflow: hidden;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-
-    /* LOGIN */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #1a1a2e; color: white; overflow-x: hidden; }
+    
+    /* ==================== LOGIN ==================== */
     #login-screen {
-      position: absolute;
-      z-index: 100;
-      background: #0f2b18;
-      padding: 40px;
-      border-radius: 10px;
-      text-align: center;
-      border: 2px solid gold;
-    }
-    input { padding: 10px; font-size: 18px; width: 200px; margin-bottom: 10px; }
-    button.main-btn { padding: 10px 20px; font-size: 18px; background: gold; border: none; cursor: pointer; font-weight: bold; }
-
-    /* STO I GRÁFICA */
-    #game-screen { display: none; width: 100%; height: 100%; position: relative; }
-
-    /* IGRAČI (POZICIJE) */
-    .player-slot { position: absolute; display: flex; flex-direction: column; align-items: center; transition: all 0.3s; }
-    
-    /* Ime igrača i žuti krug kada je na redu */
-    .player-name {
-      background: rgba(0,0,0,0.6);
-      padding: 5px 15px;
-      border-radius: 20px;
-      font-weight: bold;
-      font-size: 16px;
-      border: 2px solid transparent;
-      transition: all 0.3s;
-    }
-    
-    /* ŽUTA BOJA ZA AKTIVNOG IGRAČA */
-    .player-active .player-name {
-      border-color: yellow;
-      box-shadow: 0 0 15px yellow;
-      color: yellow;
-    }
-
-    /* KARTE - POVEĆANE 2.5X */
-    .hand { display: flex; justify-content: center; gap: -10px; margin-top: 5px; }
-    .card {
-      width: 130px;  /* Povećano */
-      height: 190px; /* Povećano */
-      background: white;
-      border-radius: 10px;
       display: flex;
       flex-direction: column;
-      justify-content: center;
       align-items: center;
-      font-size: 45px; /* Veliki font */
-      font-weight: bold;
-      cursor: pointer;
-      box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
-      border: 2px solid #ccc;
-      user-select: none;
-      position: relative;
+      justify-content: center;
+      height: 100vh;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     }
-    .card.red { color: #d32f2f; }
-    .card.black { color: #212121; }
-    .card:hover { transform: translateY(-20px); z-index: 10; }
-    .card-back { background: repeating-linear-gradient(45deg, #1565c0, #1565c0 10px, #1976d2 10px, #1976d2 20px); border: 4px solid white; }
-    .card-back:hover { transform: none; }
-
-    /* PANC ZA INFORMACIJE (DESNO SREDINA) */
-    .info-panel-right {
-      position: absolute;
-      right: 20px;
-      top: 40%;
-      transform: translateY(-50%);
-      width: 250px;
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
+    .login-box {
+      background: rgba(255,255,255,0.1);
+      padding: 40px;
+      border-radius: 15px;
+      border: 2px solid gold;
+      text-align: center;
     }
-
-    /* PROZOR LICITACIJE (LOG) */
-    .log-window {
-      background: rgba(255, 255, 255, 0.9);
-      color: black;
-      padding: 10px;
-      border-radius: 8px;
-      height: 250px;
-      overflow-y: auto;
-      font-size: 14px;
-      border: 2px solid #555;
-    }
-    .log-entry { border-bottom: 1px solid #ccc; padding: 2px 0; }
-    .log-dealer { font-weight: bold; color: blue; }
-    .log-bid { color: green; }
-    .log-contract { font-weight: bold; color: red; font-size: 16px; text-align: center; margin-top: 10px; }
-
-    /* IKONICE (DESNO IZNAD LOGA) */
-    .game-icons { display: flex; gap: 10px; justify-content: center; }
-    .icon-box {
-      width: 60px; height: 60px;
-      background: rgba(0,0,0,0.5);
-      border: 2px solid white;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 10px; text-align: center; cursor: pointer;
-    }
-    .icon-box:hover { background: rgba(255,255,255,0.2); }
-
-    /* TABELA SKOROVA (DOLE LEVO) */
-    .score-panel {
-      position: absolute;
-      left: 20px;
-      bottom: 20px;
+    .login-box h1 { margin-bottom: 30px; color: gold; }
+    .login-box input {
+      display: block;
       width: 300px;
-      background: #d3d3d3; /* Siva pozadina */
-      padding: 10px;
-      border-radius: 5px;
-      color: black; /* Crni brojevi */
-    }
-    table { width: 100%; border-collapse: collapse; text-align: center; }
-    th { background: #999; padding: 5px; border: 1px solid black; }
-    td { padding: 5px; border: 1px solid black; font-weight: bold; }
-
-    /* DUGMAD ZA LICITACIJU (SREDINA DOLE - VERTIKALNO) */
-    .bidding-controls {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: none; /* Sakriveno dok nije tvoj red */
-      flex-direction: column; /* Jedno ispod drugog */
-      gap: 10px;
-      z-index: 50;
-    }
-    .bid-btn {
-      width: 200px;
-      height: 50px;
-      font-size: 20px;
-      font-weight: bold;
-      cursor: pointer;
+      padding: 12px;
+      margin: 10px 0;
+      font-size: 16px;
       border: none;
       border-radius: 5px;
-      background: #2196F3;
-      color: white;
-      box-shadow: 2px 2px 5px black;
     }
-    .bid-btn.igra { background: #ff9800; } /* IGRA narandžasta */
-    .bid-btn.pass { background: #f44336; }
-    .bid-btn.special { background: #4CAF50; }
-    .bid-btn:hover { opacity: 0.9; }
-
-    /* CHAT (GORE DESNO - MALI) */
-    .chat-mini {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      width: 200px;
-      height: 100px;
-      background: rgba(0,0,0,0.7);
-      color: white;
-      font-size: 12px;
-      padding: 5px;
+    .login-box button {
+      width: 300px;
+      padding: 12px;
+      margin-top: 20px;
+      font-size: 18px;
+      background: gold;
+      border: none;
       border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .login-box button:hover { background: #ffd700; }
+
+    /* ==================== LOBBY ==================== */
+    #lobby-screen { display: none; min-height: 100vh; }
+    
+    /* HEADER */
+    .lobby-header {
+      background: rgba(0,0,0,0.5);
+      padding: 15px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid gold;
+    }
+    .lobby-title { font-size: 24px; color: gold; font-weight: bold; }
+    .header-icons { display: flex; gap: 20px; }
+    .header-btn {
+      padding: 10px 20px;
+      background: #0f3460;
+      border: 2px solid gold;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: 0.3s;
+    }
+    .header-btn:hover { background: gold; color: black; }
+
+    /* MAIN CONTENT */
+    .lobby-main {
+      display: flex;
+      padding: 20px;
+      gap: 20px;
+      height: calc(100vh - 80px);
+    }
+
+    /* LEFT SIDE - GAMES & CHAT */
+    .lobby-left { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+
+    /* ACTIVE GAMES */
+    .games-section {
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 20px;
+      flex: 1;
       overflow-y: auto;
     }
+    .section-title {
+      font-size: 20px;
+      color: gold;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #0f3460;
+    }
+    .game-card {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: 0.3s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .game-card:hover { border-color: gold; transform: translateX(5px); }
+    .game-info h3 { color: #4ecca3; margin-bottom: 5px; }
+    .game-players { font-size: 14px; color: #aaa; }
+    .game-kib { 
+      background: gold; 
+      color: black; 
+      padding: 5px 10px; 
+      border-radius: 5px; 
+      font-weight: bold;
+      font-size: 12px;
+    }
 
+    /* CHAT */
+    .chat-section {
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 20px;
+      height: 300px;
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.3);
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 10px;
+    }
+    .chat-message { margin-bottom: 8px; padding: 5px; background: rgba(255,255,255,0.05); border-radius: 3px; }
+    .chat-message strong { color: gold; }
+    .chat-input { display: flex; gap: 10px; }
+    .chat-input input {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      background: rgba(0,0,0,0.3);
+      color: white;
+    }
+    .chat-input button {
+      padding: 10px 20px;
+      background: gold;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    /* RIGHT SIDE - ONLINE PLAYERS */
+    .lobby-right {
+      width: 250px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .player-list { list-style: none; }
+    .player-item {
+      padding: 10px;
+      margin-bottom: 5px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .player-status {
+      width: 10px;
+      height: 10px;
+      background: #4ecca3;
+      border-radius: 50%;
+    }
+
+    /* ==================== CREATE GAME MODAL ==================== */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: #16213e;
+      padding: 30px;
+      border-radius: 15px;
+      border: 2px solid gold;
+      width: 500px;
+    }
+    .modal-content h2 { color: gold; margin-bottom: 20px; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; color: #4ecca3; }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      background: rgba(0,0,0,0.3);
+      color: white;
+      font-size: 16px;
+    }
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .modal-buttons button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .btn-create { background: gold; color: black; }
+    .btn-cancel { background: #e74c3c; color: white; }
+
+    /* ==================== GAME TABLE (Postojeći stilovi) ==================== */
+    #game-screen { display: none; height: 100vh; background: #1a472a; }
+    /* ... ovde ide tvoj postojeći CSS za igru ... */
   </style>
 </head>
 <body>
 
-  <!-- LOGIN -->
+  <!-- ==================== LOGIN ==================== -->
   <div id="login-screen">
-    <h1>Preferans</h1>
-    <input type="text" id="username" placeholder="Tvoje Ime">
-    <button class="main-btn" onclick="joinGame()">UĐI</button>
+    <div class="login-box">
+      <h1>♠ PREFERANS ♥</h1>
+      <input type="text" id="login-username" placeholder="Korisničko ime">
+      <input type="password" id="login-password" placeholder="Lozinka">
+      <button onclick="login()">Uloguj se</button>
+      <button onclick="register()" style="background: #0f3460; margin-top: 10px;">Registruj se</button>
+    </div>
   </div>
 
-  <!-- IGRA -->
+  <!-- ==================== LOBBY ==================== -->
+  <div id="lobby-screen">
+    <div class="lobby-header">
+      <div class="lobby-title">PREFERANS PORTAL</div>
+      <div class="header-icons">
+        <button class="header-btn" onclick="openCreateModal()">+ Kreiraj Igru</button>
+        <button class="header-btn" onclick="showRanking()">📊 Rang Lista</button>
+        <button class="header-btn" onclick="showProfile()">👤 Moj Profil</button>
+        <button class="header-btn" onclick="logout()">Izlaz</button>
+      </div>
+    </div>
+
+    <div class="lobby-main">
+      <div class="lobby-left">
+        <!-- AKTIVNE IGRE -->
+        <div class="games-section">
+          <div class="section-title">🎮 Igre u toku</div>
+          <div id="games-list">
+            <!-- Dinamički se popunjava -->
+          </div>
+        </div>
+
+        <!-- GLOBAL CHAT -->
+        <div class="chat-section">
+          <div class="section-title">💬 Globalni Chat</div>
+          <div class="chat-messages" id="global-chat-messages"></div>
+          <div class="chat-input">
+            <input type="text" id="global-chat-input" placeholder="Pošalji poruku...">
+            <button onclick="sendGlobalChat()">Pošalji</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ONLINE IGRAČI -->
+      <div class="lobby-right">
+        <div class="section-title"> Online (<span id="online-count">0</span>)</div>
+        <ul class="player-list" id="online-players">
+          <!-- Dinamički se popunjava -->
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== CREATE GAME MODAL ==================== -->
+  <div id="create-modal" class="modal">
+    <div class="modal-content">
+      <h2>Kreiraj Novu Partiju</h2>
+      
+      <div class="form-group">
+        <label>Ime Stola:</label>
+        <input type="text" id="table-name" placeholder="npr. Vladimirov Sto">
+      </div>
+
+      <div class="form-group">
+        <label>Početne Bule:</label>
+        <input type="number" id="start-bule" value="100">
+      </div>
+
+      <div class="form-group">
+        <label>Maksimalno Refa:</label>
+        <input type="number" id="max-refa" value="2" min="0" max="5">
+      </div>
+
+      <div class="form-group">
+        <label>Broj Ruku:</label>
+        <input type="number" id="num-hands" value="5" min="1" max="20">
+      </div>
+
+      <div class="form-group">
+        <label>Statistika (Tvoj procenat odigranih ruku):</label>
+        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 5px;">
+          <div>Ukupno podeljeno ruku: <strong id="stat-total">0</strong></div>
+          <div>Tvoje odigrane: <strong id="stat-played">0</strong></div>
+          <div style="color: gold; margin-top: 5px;">Procenat: <strong id="stat-percent">0%</strong></div>
+        </div>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="btn-create" onclick="createGame()">Kreiraj</button>
+        <button class="btn-cancel" onclick="closeCreateModal()">Otkaži</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== GAME TABLE ==================== -->
   <div id="game-screen">
-    
-    <!-- LEVO DOLE: TABELA SKOROVA -->
-    <div class="score-panel">
-      <h3 style="margin:0 0 5px 0; text-align:center;">Rezultati</h3>
-      <table id="score-table">
-        <tr><th>Igrač</th><th>Bodovi</th></tr>
-        <!-- Popunjava se dinamički -->
-      </table>
+    <!-- Ovde ide tvoj postojeći HTML za igru -->
+    <button onclick="backToLobby()" style="position:absolute; top:10px; left:10px; z-index:100;">← Nazad na Lobby</button>
+    <div style="color:white; text-align:center; padding-top:100px; font-size:30px;">
+      IGRA U TOKU...
     </div>
-
-    <!-- DESNO SREDINA: INFO PANEL -->
-    <div class="info-panel-right">
-      <!-- IKONICE -->
-      <div class="game-icons">
-        <div class="icon-box" onclick="alert('Nema Pad')">NEMA<br>PAD</div>
-        <div class="icon-box" onclick="alert('Preuzimam')">PREUZIMAM<br>PAD</div>
-        <div class="icon-box" onclick="alert('Sve Moje')">SVE<br>MOJE</div>
-      </div>
-
-      <!-- LOG LICITACIJE -->
-      <div class="log-window" id="bid-log">
-        <div class="log-entry">Čekanje na igrače...</div>
-      </div>
-    </div>
-
-    <!-- CHAT -->
-    <div class="chat-mini" id="chat-box"></div>
-
-    <!-- STOLICA 1 (Levo Gore) -->
-    <div class="player-slot" id="p1" style="top: 50px; left: 15%;">
-      <div class="player-name" id="name-1">Čeka se...</div>
-      <div class="hand" id="hand-1"></div>
-    </div>
-
-    <!-- STOLICA 2 (Desno Gore) -->
-    <div class="player-slot" id="p2" style="top: 50px; right: 15%;">
-      <div class="player-name" id="name-2">Čeka se...</div>
-      <div class="hand" id="hand-2"></div>
-    </div>
-
-    <!-- STOLICA JA (Dole) -->
-    <div class="player-slot" id="p0" style="bottom: 220px;">
-      <div class="hand" id="hand-me"></div>
-      <div class="player-name" id="name-me">TI</div>
-    </div>
-
-    <!-- DUGMAD LICITACIJE (VERTIKALNO) -->
-    <div class="bidding-controls" id="bidding-controls">
-      <button class="bid-btn igra" onclick="bidIGRA()">IGRA (+2)</button>
-      <button class="bid-btn" onclick="bid(2, 'S')">2 ♠ (Pik)</button>
-      <button class="bid-btn" onclick="bid(3, 'D')">3 ♦ (Karo)</button>
-      <button class="bid-btn" onclick="bid(4, 'H')">4 ♥ (Herc)</button>
-      <button class="bid-btn" onclick="bid(5, 'C')">5 ♣ (Tref)</button>
-      <button class="bid-btn special" onclick="bid(6, 'NT')">BETL (6)</button>
-      <button class="bid-btn special" onclick="bid(7, 'NT')">SANS (7)</button>
-      <button class="bid-btn special" onclick="bid(8, 'NT')">PREFERANS (8)</button>
-      <button class="bid-btn pass" onclick="passBid()">DALJE</button>
-    </div>
-
   </div>
 
   <script>
     const socket = io();
-    let myId = null;
-    let myIndex = -1;
+    let currentUser = null;
     let currentGame = null;
 
-    const SUITS = { 'S': '♠', 'H': '♥', 'D': '♦', 'C': '♣' };
-
-    function joinGame() {
-      const name = document.getElementById('username').value;
-      if(!name) return alert("Unesi ime!");
-      socket.emit('user:join', { username: name, displayName: name });
-      setTimeout(() => socket.emit('game:create', { name: 'Sto', maxRefas: 2, numHands: 5 }), 500);
+    // ==================== AUTH ====================
+    function login() {
+      const username = document.getElementById('login-username').value;
+      const password = document.getElementById('login-password').value;
+      
+      if(!username || !password) return alert('Unesi username i lozinku!');
+      
+      socket.emit('auth:login', { username, password });
     }
 
-    socket.on('user:joined', () => {
-      myId = socket.id;
+    function register() {
+      const username = document.getElementById('login-username').value;
+      const password = document.getElementById('login-password').value;
+      
+      if(!username || !password) return alert('Unesi username i lozinku!');
+      
+      socket.emit('auth:register', { username, password });
+    }
+
+    socket.on('auth:success', (user) => {
+      currentUser = user;
       document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('game-screen').style.display = 'block';
+      document.getElementById('lobby-screen').style.display = 'block';
+      loadGames();
     });
 
-    socket.on('game:update', ({ game }) => {
+    socket.on('auth:error', (msg) => alert(msg));
+
+    function logout() {
+      socket.emit('auth:logout');
+      location.reload();
+    }
+
+    // ==================== GAMES ====================
+    function loadGames() {
+      socket.emit('games:list');
+    }
+
+    function openCreateModal() {
+      // Učitaj statistiku korisnika
+      socket.emit('user:stats', currentUser.username);
+      document.getElementById('create-modal').style.display = 'flex';
+    }
+
+    function closeCreateModal() {
+      document.getElementById('create-modal').style.display = 'none';
+    }
+
+    function createGame() {
+      const settings = {
+        name: document.getElementById('table-name').value,
+        startBule: parseInt(document.getElementById('start-bule').value),
+        maxRefas: parseInt(document.getElementById('max-refa').value),
+        numHands: parseInt(document.getElementById('num-hands').value)
+      };
+
+      if(!settings.name) return alert('Unesi ime stola!');
+
+      socket.emit('game:create', settings);
+      closeCreateModal();
+    }
+
+    function joinGame(gameId) {
+      socket.emit('game:join', { gameId });
+    }
+
+    socket.on('games:list', (games) => {
+      const list = document.getElementById('games-list');
+      list.innerHTML = '';
+      
+      games.forEach(game => {
+        const div = document.createElement('div');
+        div.className = 'game-card';
+        div.onclick = () => joinGame(game.id);
+        div.innerHTML = `
+          <div class="game-info">
+            <h3>${game.name}</h3>
+            <div class="game-players">
+              Igrači: ${game.players.join(', ')} (${game.players.length}/3)
+            </div>
+          </div>
+          <div class="game-kib">KIB</div>
+        `;
+        list.appendChild(div);
+      });
+    });
+
+    socket.on('user:stats', (stats) => {
+      document.getElementById('stat-total').textContent = stats.totalHands || 0;
+      document.getElementById('stat-played').textContent = stats.playedHands || 0;
+      const percent = stats.totalHands > 0 ? Math.round((stats.playedHands / stats.totalHands) * 100) : 0;
+      document.getElementById('stat-percent').textContent = percent + '%';
+    });
+
+    // ==================== ONLINE PLAYERS ====================
+    socket.on('players:list', (players) => {
+      const list = document.getElementById('online-players');
+      document.getElementById('online-count').textContent = players.length;
+      list.innerHTML = '';
+      
+      players.forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'player-item';
+        li.innerHTML = `
+          <div class="player-status"></div>
+          <div>${p.displayName}</div>
+        `;
+        list.appendChild(li);
+      });
+    });
+
+    // ==================== GLOBAL CHAT ====================
+    function sendGlobalChat() {
+      const input = document.getElementById('global-chat-input');
+      const text = input.value;
+      if(!text) return;
+      
+      socket.emit('chat:global', { text, username: currentUser.username });
+      input.value = '';
+    }
+
+    socket.on('chat:global', (msg) => {
+      const box = document.getElementById('global-chat-messages');
+      box.innerHTML += `<div class="chat-message"><strong>${msg.username}:</strong> ${msg.text}</div>`;
+      box.scrollTop = box.scrollHeight;
+    });
+
+    // ==================== NAVIGATION ====================
+    function showRanking() {
+      alert('Rang lista - u izradi');
+    }
+
+    function showProfile() {
+      alert('Moj profil - u izradi');
+    }
+
+    function backToLobby() {
+      document.getElementById('game-screen').style.display = 'none';
+      document.getElementById('lobby-screen').style.display = 'block';
+      loadGames();
+    }
+
+    // ==================== GAME TABLE (placeholder) ====================
+    socket.on('game:joined', (game) => {
       currentGame = game;
-      if(game.players) {
-        const me = game.players.find(p => p.socketId === myId);
-        if(me) myIndex = game.players.indexOf(me);
-      }
-      renderGame();
+      document.getElementById('lobby-screen').style.display = 'none';
+      document.getElementById('game-screen').style.display = 'block';
+      // Ovde inicijalizuj svoju postojeću igru logiku
     });
-
-    function renderGame() {
-      if(!currentGame || !currentGame.players) return;
-
-      // 1. Reset
-      document.querySelectorAll('.player-slot').forEach(el => {
-        el.className = 'player-slot'; // Remove active class
-        el.querySelector('.hand').innerHTML = '';
-      });
-      document.getElementById('bidding-controls').style.display = 'none';
-
-      // 2. Prikaz protivnika (Top 1 i Top 2)
-      // Protivnik 1 (levo)
-      if(currentGame.players[1]) renderOpponent(1, 'p1', 'name-1', 'hand-1');
-      // Protivnik 2 (desno)
-      if(currentGame.players[2]) renderOpponent(2, 'p2', 'name-2', 'hand-2');
-
-      // 3. Prikaz MENE (Dole)
-      if(myIndex !== -1 && currentGame.players[myIndex]) {
-        renderMyHand(myIndex, 'p0', 'name-me', 'hand-me');
-      }
-
-      // 4. Highlight aktivnog igrača (Žuta boja)
-      let activeIdx = -1;
-      if(currentGame.phase === 'bidding') activeIdx = currentGame.currentBidder;
-      else if(currentGame.phase === 'playing') activeIdx = currentGame.currentTurn;
-      
-      if(activeIdx !== -1) {
-        let slotId = activeIdx === 0 ? 'p0' : (activeIdx === 1 ? 'p1' : 'p2');
-        document.getElementById(slotId).classList.add('player-active');
-      }
-
-      // 5. Ažuriraj Log (Desno)
-      updateLog();
-      
-      // 6. Ažuriraj Tabelu (Levo)
-      updateScoreTable();
-    }
-
-    function renderOpponent(idx, slotId, nameId, handId) {
-      const p = currentGame.players[idx];
-      document.getElementById(nameId).innerText = p.displayName + (currentGame.dealerIndex === idx ? ' (D)' : '');
-      const handEl = document.getElementById(handId);
-      // Leđa karata
-      if(currentGame.hands && currentGame.hands[idx]) {
-        const count = currentGame.hands[idx].length;
-        for(let i=0; i<count; i++) {
-          const c = document.createElement('div');
-          c.className = 'card card-back';
-          c.style.marginLeft = '-80px'; // Preklapanje velikih karata
-          handEl.appendChild(c);
-        }
-      }
-    }
-
-    function renderMyHand(idx, slotId, nameId, handId) {
-      const p = currentGame.players[idx];
-      document.getElementById(nameId).innerText = p.displayName + " (TI)" + (currentGame.dealerIndex === idx ? ' (D)' : '');
-      const handEl = document.getElementById(handId);
-      handEl.innerHTML = ''; // Clear
-      
-      if(currentGame.hands && currentGame.hands[idx]) {
-        currentGame.hands[idx].forEach(card => {
-          const c = document.createElement('div');
-          const color = (card.suit === 'H' || card.suit === 'D') ? 'red' : 'black';
-          c.className = `card ${color}`;
-          c.innerHTML = `<div style="font-size:30px">${card.value}</div><div style="font-size:60px">${SUITS[card.suit]}</div>`;
-          c.onclick = () => playCard(card.suit, card.value);
-          handEl.appendChild(c);
-        });
-      }
-
-      // Prikaz kontrole
-      if(currentGame.phase === 'bidding' && currentGame.currentBidder === idx) {
-        document.getElementById('bidding-controls').style.display = 'flex';
-      }
-    }
-
-    function updateLog() {
-      const logEl = document.getElementById('bid-log');
-      let html = '';
-      
-      // Ko deli
-      if(currentGame.players[currentGame.dealerIndex]) {
-        html += `<div class="log-entry log-dealer">Deli: ${currentGame.players[currentGame.dealerIndex].displayName}</div>`;
-      }
-
-      // Istorija
-      if(currentGame.bidHistory) {
-        currentGame.bidHistory.forEach(b => {
-          const pName = currentGame.players[b.player] ? currentGame.players[b.player].displayName : '?';
-          let txt = b.isIgra ? "IGRA" : (b.level ? `${b.level} ${SUITS[b.suit] || ''}` : "Dalje");
-          html += `<div class="log-entry log-bid">${pName}: ${txt}</div>`;
-        });
-      }
-
-      // Ugovor
-      if(currentGame.phase === 'playing' && currentGame.contract) {
-        const c = currentGame.contract;
-        let txt = "";
-        if(c.level === 6) txt = "BETL";
-        else if(c.level === 7) txt = "SANS";
-        else if(c.level === 8) txt = "PREFERANS";
-        else txt = `${c.level} ${SUITS[c.suit]}`;
-        if(c.isIgra) txt += " (IGRA)";
-        
-        html += `<div class="log-contract">UGOVOR: ${txt}</div>`;
-        if(currentGame.refaCount > 0) html += `<div style="color:red; text-align:center;">REF x${Math.pow(2, currentGame.refaCount)}</div>`;
-      }
-
-      logEl.innerHTML = html;
-      logEl.scrollTop = logEl.scrollHeight;
-    }
-
-    function updateScoreTable() {
-      const table = document.getElementById('score-table');
-      let html = '<tr><th>Igrač</th><th>Bodovi</th></tr>';
-      currentGame.players.forEach(p => {
-        const score = currentGame.scores[p.username] || 0;
-        html += `<tr><td>${p.displayName}</td><td>${score}</td></tr>`;
-      });
-      table.innerHTML = html;
-    }
-
-    // --- AKCIJE ---
-    function bid(level, suit) {
-      socket.emit('game:bid', { gameId: currentGame.id, level, suit, isIgra: false });
-    }
-    function bidIGRA() {
-      // Logika za IGRA: uzima trenutni highestBid ili default
-      let l = 2, s = 'S';
-      if(currentGame.highestBid) { l = currentGame.highestBid.level; s = currentGame.highestBid.suit; }
-      socket.emit('game:bid', { gameId: currentGame.id, level: l, suit: s, isIgra: true });
-    }
-    function passBid() {
-      socket.emit('game:bid', { gameId: currentGame.id, level: null, suit: null });
-    }
-    function playCard(suit, value) {
-      socket.emit('game:play', { gameId: currentGame.id, suit, value });
-    }
 
   </script>
 </body>
