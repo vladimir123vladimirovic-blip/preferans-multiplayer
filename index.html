@@ -203,7 +203,7 @@
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('lobby-screen').style.display = 'block';
       document.getElementById('header-avatar').src = user.profilePic || 'https://via.placeholder.com/50';
-      loadGames(); // Učitaj igre odmah nakon login-a
+      loadGames();
       loadStats();
     });
 
@@ -267,11 +267,38 @@
       closeCreateModal();
     }
 
+    // ✅ POPRAVLJENO - ODMAH PRIKAZUJE IGRU
     socket.on('game:created', ({ gameId, game }) => {
-      console.log('✅ Igra kreirana:', gameId);
+      console.log('✅ Igra kreirana:', gameId, game);
       currentGameId = gameId;
-      // Osveži listu igara
-      loadGames();
+      
+      // ODMAH dodaj igru u listu ručno
+      const list = document.getElementById('games-list');
+      const div = document.createElement('div');
+      div.className = 'game-card';
+      div.onclick = () => joinGame(gameId);
+      div.innerHTML = `
+        <div class="game-info">
+          <h3>${game.settings.name || 'Sto'}</h3>
+          <div class="game-players">Igrači: ${game.players.map(p=>p.displayName).join(', ')} (${game.players.length}/3)</div>
+          <div class="game-players">Status: ${game.phase}</div>
+        </div>
+        <div class="game-kib">KIB</div>
+      `;
+      
+      // Ako postoji "nema igara" poruka, obriši je
+      if (list.querySelector('.no-games')) {
+        list.innerHTML = '';
+      }
+      
+      list.appendChild(div);
+      
+      // Otvori modal za pridruživanje
+      setTimeout(() => {
+        if(confirm('Igra kreirana! Da li želiš da uđeš?')) {
+          joinGame(gameId);
+        }
+      }, 100);
     });
 
     function joinGame(gameId) {
