@@ -4,17 +4,15 @@ const { Server } = require('socket.io');
 const path = require('path');
 
 const app = express();
-
-// ✅ ISPRAVKA PUTANJE: Pošto si rekao da nemaš 'public' folder,
-// ovo servira fajlove direktno iz root foldera gde je index.html
 app.use(express.static(__dirname));
 
 const server = http.createServer(app);
 const io = new Server(server);
 
-// In-memory storage
-const users = new Map();
-const games = new Map();
+// ===== IN-MEMORY STORAGE =====
+const users = new Map();           // socketId -> user info
+const usersDB = new Map();         // username -> {password, stats} (za auth)
+const games = new Map();           // gameId -> game state
 const waitingPlayers = [];
 
 // ===== GAME LOGIC HELPERS =====
@@ -39,29 +37,24 @@ function sortHand(hand) {
   const valOrd = { '7': 0, '8': 1, '9': 2, '10': 3, 'J': 4, 'Q': 5, 'K': 6, 'A': 7 };
   hand.sort((a, b) => {
     if (suitOrd[a.suit] !== suitOrd[b.suit]) return suitOrd[a.suit] - suitOrd[b.suit];
-    return valOrd[a.value] - valOrd[a.value];
+    return valOrd[a.value] - valOrd[b.value];
   });
 }
 
 function getBidValue(level, suit) {
   const order = { 'S': 1, 'C': 2, 'D': 3, 'H': 4, 'NT': 5 };
-  // NT (Sans/Preferans) su jači
   return suit === 'NT' ? level * 10 + 5 : level * 10 + order[suit];
 }
 
-// ✅ ISPRAVKA BODOVANJA
 function calculateContractPoints(level, suit, isIgra) {
   let base = level * 2;
-  // Ako je IGRA (bez talona), vrednost raste za 2
-  if (isIgra) base += 2; 
+  if (isIgra) base += 2;
   return base;
 }
 
 // ===== INITIALIZATION =====
 function initGame(gameId, settings) {
   const deck = createDeck();
-  
-  // ✅ ISPRAVKA DELJENJA: Prvo 2 karte u talon, pa 10 svakom (5 pa 3 redosled)
   const talon = deck.slice(0, 2);
   const hands = [deck.slice(2, 12), deck.slice(12, 22), deck.slice(22, 32)];
 
@@ -72,8 +65,7 @@ function initGame(gameId, settings) {
     spectators: [],
     hands,
     talon,
-    // ✅ ISPRAVKA DELITELJA
-    dealerIndex: 0, 
+    dealerIndex: 0,
     phase: 'bidding',
     contract: null,
     currentBidder: 0,
@@ -85,16 +77,57 @@ function initGame(gameId, settings) {
     currentTurn: 0,
     scores: {},
     tricks: [],
-    // ✅ ISPRAVKA REFE
     refaCount: 0,
     maxRefas: settings.maxRefas || 2
   };
 }
 
-// ===== SOCKET.IO HANDLERS =====
+// ===== SOCKET.IO CONNECTION =====
 io.on('connection', (socket) => {
   console.log('🔌 Connected:', socket.id);
 
+  // ===== 🆕 AUTH HANDLERS (NOVO ZA PORTAL) =====
+  socket.on('auth:login', ({ username, password }) => {
+    const user = usersDB.get(username);
+    if (!user || user.password !== password) {
+      return socket.emit('auth:error', 'Pogrešan username ili lozinka');
+    }
+    socket.emit('auth:success', { username, displayName: username });
+  });
+
+  socket.on('auth:register', ({ username, password }) => {
+    if (usersDB.has(username)) {
+      return socket.emit('auth:error', 'Korisnik već postoji');
+    }
+    usersDB.set(username, { password, stats: { totalHands: 0, playedHands: 0 } });
+    socket.emit('auth:success', { username, displayName: username });
+  });
+
+  socket.on('auth:logout', () => {
+    // Logout logika
+  });
+
+  socket.on('user:stats', (username) => {
+    const user = usersDB.get(username);
+    socket.emit('user:stats', user ? user.stats : { totalHands: 0, playedHands: 0 });
+  });
+
+  socket.on('games:list', () => {
+    const gamesList = [...games.values()].map(g => ({
+      id: g.id,
+      name: g.settings.name || 'Sto',
+      players: g.players.map(p => p.displayName),
+      status: g.phase
+    }));
+    socket.emit('games:list', gamesList);
+  });
+
+  socket.on('chat:global', ({ text, username }) => {
+    io.emit('chat:global', { text, username });
+  });
+  // ===== 🆕 KRAJ AUTH HANDLERS =====
+
+  // ===== POSTOJEĆI HANDLERS (IGRA) =====
   socket.on('user:join', (userData) => {
     users.set(socket.id, { ...userData, socketId: socket.id });
     socket.broadcast.emit('user:online', { username: userData.username, displayName: userData.displayName });
@@ -142,10 +175,8 @@ io.on('connection', (socket) => {
     const playerIdx = game.players.findIndex(p => p.username === user.username);
     if (playerIdx !== game.currentBidder) return;
     
-    // Procesuiranje licitacije
     if (level && suit) {
       const bidValue = getBidValue(level, suit);
-      // Provera da li je ponuda jača (ili ako je IGRA na istom nivou, što je jače)
       if (!game.highestBid || bidValue > getBidValue(game.highestBid.level, game.highestBid.suit) || (level === game.highestBid.level && isIgra)) {
         game.highestBid = { level, suit, player: playerIdx, isIgra };
       }
@@ -154,8 +185,6 @@ io.on('connection', (socket) => {
     game.bidHistory.push({ player: playerIdx, level, suit, isIgra });
     game.currentBidder = (game.currentBidder + 1) % 3;
     
-    // Provera da li je licitacija završena (2 uzastopna 'dalje' / pass)
-    // Simplifikovana logika za pass: ako nema level/suit
     const recentPasses = game.bidHistory.slice(-2).filter(b => !b.level).length;
     
     if (recentPasses >= 2 && game.highestBid) {
@@ -178,7 +207,6 @@ io.on('connection', (socket) => {
     const cardIdx = hand.findIndex(c => c.suit === suit && c.value === value);
     if (cardIdx < 0) return;
     
-    // Pravilo praćenja boje
     if (game.trickCards[game.trickStarter]) {
       const ledSuit = game.trickCards[game.trickStarter].suit;
       const hasLedSuit = hand.some(c => c.suit === ledSuit);
@@ -225,7 +253,6 @@ function startBidding(gameId) {
   if (!game) return;
   
   game.phase = 'bidding';
-  // ✅ ISPRAVKA: Prvi licitira igrač DESNO od delitelja
   game.currentBidder = (game.dealerIndex + 1) % 3;
   game.bidHistory = [];
   game.highestBid = null;
@@ -238,9 +265,7 @@ function endBidding(gameId) {
   const game = games.get(gameId);
   if (!game) return;
   
-  // ✅ ISPRAVKA: Ako nema najviše ponude (svi dali "dalje")
   if (!game.highestBid) {
-    // Dodaje se REFA
     if (game.refaCount < game.maxRefas) {
       game.refaCount++;
     }
@@ -250,23 +275,19 @@ function endBidding(gameId) {
     return;
   }
   
-  // Ugovor je prihvaćen
   game.contract = { ...game.highestBid };
   game.phase = 'playing';
   
   const bidderIdx = game.contract.player;
   
-  // ✅ ISPRAVKA: Ako je IGRA (bez talona), nosilac NE uzima talon
   if (!game.contract.isIgra) {
     game.hands[bidderIdx].push(...game.talon);
     game.talon = [];
     sortHand(game.hands[bidderIdx]);
   } else {
-    // Ako je IGRA, talon ostaje nepodignut (ili se tretira kao mrtav)
     game.talon = []; 
   }
   
-  // ✅ ISPRAVKA: Prvi štih vodi igrač DESNO od delitelja (NE nosilac)
   game.trickStarter = (game.dealerIndex + 1) % 3;
   game.currentTurn = game.trickStarter;
   
@@ -284,8 +305,7 @@ function resolveTrick(gameId) {
   
   const valOrder = { '7': 0, '8': 1, '9': 2, '10': 3, 'J': 4, 'Q': 5, 'K': 6, 'A': 7 };
   
-  // Logika za adut/betl/sans
-  const isAdutGame = contractSuit !== 'NT' && game.contract.level !== 6; // 6 je Betl, 7 Sans (NT), 8 Preferans (NT)
+  const isAdutGame = contractSuit !== 'NT' && game.contract.level !== 6;
   
   for (let i = 0; i < 3; i++) {
     if (i === game.trickStarter) continue;
@@ -293,14 +313,9 @@ function resolveTrick(gameId) {
     if (!c) continue;
     
     if (isAdutGame && c.suit === contractSuit) {
-      // Adut seče
       if (winningCard.suit !== contractSuit) { winner = i; winningCard = c; }
       else if (valOrder[c.value] > valOrder[winningCard.value]) { winner = i; winningCard = c; }
     } else if (c.suit === ledSuit) {
-      // Ista boja kojom je početo
-      if (winningCard.suit !== contractSuit && winningCard.suit !== ledSuit) {
-         // Ova grana retko pada ovde jer je ledSuit uvek validan osim ako je adut već u pitanju
-      }
       if (winningCard.suit === ledSuit && valOrder[c.value] > valOrder[winningCard.value]) {
         winner = i; winningCard = c;
       }
@@ -325,7 +340,6 @@ function endHand(gameId) {
   const game = games.get(gameId);
   if (!game) return;
   
-  // Brojanje štihova
   const tricksWon = [0, 0, 0];
   game.tricks.forEach(t => tricksWon[t.winner]++);
   
@@ -335,30 +349,24 @@ function endHand(gameId) {
   
   const { level, suit, isIgra } = game.contract;
   
-  // ✅ ISPRAVKA: Tačni uslovi za prolaz
-  if (suit === 'NT' && level === 8) contractFulfilled = bidderTricks === 10;   // Preferans = 10
-  else if (suit === 'NT' && level === 7) contractFulfilled = bidderTricks >= 6; // Sans = 6
-  else if (level === 6) contractFulfilled = bidderTricks === 0;                 // Betl = 0
-  else contractFulfilled = bidderTricks >= 6;                                   // Adutske (2-5) = 6
+  if (suit === 'NT' && level === 8) contractFulfilled = bidderTricks === 10;
+  else if (suit === 'NT' && level === 7) contractFulfilled = bidderTricks >= 6;
+  else if (level === 6) contractFulfilled = bidderTricks === 0;
+  else contractFulfilled = bidderTricks >= 6;
   
-  // ✅ ISPRAVKA: Obračun poena
   let basePoints = calculateContractPoints(level, suit, isIgra);
   let finalPoints = contractFulfilled ? basePoints : -basePoints;
   
-  // ✅ ISPRAVKA: Primena Refe (duplira bodove)
   if (game.refaCount > 0) {
     finalPoints *= Math.pow(2, game.refaCount);
-    // Refa se resetuje nakon odigrane ruke
-    game.refaCount = 0; 
+    game.refaCount = 0;
   }
   
-  // Upis u skor
   for (let i = 0; i < 3; i++) {
     const username = game.players[i].username;
     if (i === bidderIdx) {
       game.scores[username] = (game.scores[username] || 0) + finalPoints;
     } else {
-      // Pratitelji dobijaju suprotan predznak
       game.scores[username] = (game.scores[username] || 0) - finalPoints;
     }
   }
@@ -379,7 +387,6 @@ function resetHand(gameId) {
   const game = games.get(gameId);
   if (!game) return;
   
-  // ✅ ISPRAVKA: Rotacija delitelja
   game.dealerIndex = (game.dealerIndex + 1) % 3;
   
   const deck = createDeck();
@@ -389,7 +396,6 @@ function resetHand(gameId) {
   for (let i = 0; i < 3; i++) sortHand(game.hands[i]);
   
   game.phase = 'bidding';
-  // ✅ ISPRAVKA: Prvi licitira desno od novog delitelja
   game.currentBidder = (game.dealerIndex + 1) % 3;
   game.bidHistory = [];
   game.highestBid = null;
@@ -417,12 +423,10 @@ function processBotBid(gameId) {
     const g = games.get(gameId);
     if (!g || g.phase !== 'bidding') return;
     
-    // Jednostavan bot: nasumično licitira ili prolazi
     if (Math.random() > 0.3 && (!g.highestBid || Math.random() > 0.5)) {
       const level = Math.floor(Math.random() * 2) + 1;
       const suits = ['S', 'C', 'D', 'H', 'NT'];
       const suit = suits[Math.floor(Math.random() * suits.length)];
-      // Bot ne igra "IGRA" u ovoj prostoj verziji, samo normalno
       handleBotBid(gameId, game.currentBidder, level, suit, false);
     } else {
       handleBotBid(gameId, game.currentBidder, null, null, false);
