@@ -1,7 +1,6 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
 
 const app = express();
 app.use(express.static(__dirname));
@@ -10,9 +9,8 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server);
 
-// IN-MEMORY STORAGE (bez baze)
 const users = new Map();
-const usersDB = new Map(); // username -> {password, stats, profilePic, blockedUsers}
+const usersDB = new Map();
 const games = new Map();
 
 // ===== GAME HELPERS =====
@@ -63,7 +61,7 @@ function initGame(gameId, settings) {
     hands,
     talon,
     dealerIndex: 0,
-    phase: 'bidding',
+    phase: 'waiting', // ✅ PROMENJENO: prvo je waiting
     contract: null,
     currentBidder: 0,
     highestBid: null,
@@ -83,7 +81,9 @@ function initGame(gameId, settings) {
 io.on('connection', (socket) => {
   console.log('🔌 Connected:', socket.id);
 
-  // AUTH (in-memory)
+  // ODMAH POŠALJI LISTU IGARA NOVOM KORISNIKU
+  socket.emit('games:list', getGamesList());
+
   socket.on('auth:register', ({ username, password }) => {
     if (usersDB.has(username)) {
       return socket.emit('auth:error', 'Korisnik već postoji');
@@ -113,6 +113,8 @@ io.on('connection', (socket) => {
       profilePic: user.profilePic,
       blockedUsers: user.blockedUsers
     });
+    // Pošalji liste igara nakon login-a
+    socket.emit('games:list', getGamesList());
   });
 
   socket.on('user:stats', (username) => {
@@ -139,14 +141,9 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ✅ POPRAVLJENO: Uvek vraća sve igre
   socket.on('games:list', () => {
-    const gamesList = [...games.values()].map(g => ({
-      id: g.id,
-      name: g.settings.name || 'Sto',
-      players: g.players.map(p => p.displayName),
-      status: g.phase
-    }));
-    socket.emit('games:list', gamesList);
+    socket.emit('games:list', getGamesList());
   });
 
   socket.on('chat:global', ({ text, username }) => {
@@ -160,30 +157,58 @@ io.on('connection', (socket) => {
     updatePlayerList();
   });
 
+  // ✅ POPRAVLJENO: Kreiranje igre
   socket.on('game:create', (settings) => {
     const user = users.get(socket.id);
-    if (!user) return;
+    if (!user) {
+      console.log('❌ Nema user-a za socket:', socket.id);
+      return;
+    }
+    
     const gameId = 'game_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const game = initGame(gameId, settings);
     game.host = user.username;
     game.players.push({ username: user.username, displayName: user.displayName, socketId: socket.id, ready: true });
     game.scores[user.username] = 0;
-    games.set(gameId, game);
+    
+    games.set(gameId, game); // ✅ ČUVAJ IGRU
     socket.join(gameId);
+    
+    console.log('✅ Igra kreirana:', gameId, 'Broj igara:', games.size);
+    
+    // Pošalji creator-u
     socket.emit('game:created', { gameId, game });
-    broadcastGameList();
+    
+    // ✅ POŠALJI SVIMA AŽURIRANU LISTU
+    io.emit('games:list', getGamesList());
   });
 
+  // ✅ POPRAVLJENO: Pridruživanje igri
   socket.on('game:join', ({ gameId }) => {
     const user = users.get(socket.id);
     const game = games.get(gameId);
-    if (!user || !game) return socket.emit('error', { message: 'Game not found' });
-    if (game.players.length >= 3) return socket.emit('error', { message: 'Game is full' });
+    
+    if (!user) return socket.emit('error', { message: 'User not found' });
+    if (!game) return socket.emit('error', { message: 'Igra ne postoji' });
+    if (game.players.length >= 3) return socket.emit('error', { message: 'Igra je puna' });
+    
     game.players.push({ username: user.username, displayName: user.displayName, socketId: socket.id, ready: true });
     game.scores[user.username] = 0;
     socket.join(gameId);
+    
+    console.log('✅ Igrač se pridružio:', user.username, 'U igri:', game.players.length, '/3');
+    
+    // Pošalji ažuriranje svima u igri
     io.to(gameId).emit('game:update', { game });
-    if (game.players.length === 3) setTimeout(() => startBidding(gameId), 2000);
+    
+    // Ažuriraj listu igara za sve
+    io.emit('games:list', getGamesList());
+    
+    // Ako ima 3 igrača, pokreni igru
+    if (game.players.length === 3) {
+      console.log('🎮 Počinje igra sa 3 igrača!');
+      setTimeout(() => startBidding(gameId), 2000);
+    }
   });
 
   socket.on('game:bid', ({ gameId, level, suit, isIgra = false }) => {
@@ -238,7 +263,10 @@ io.on('connection', (socket) => {
         if (idx >= 0) {
           game.players.splice(idx, 1);
           io.to(gameId).emit('game:update', { game });
-          if (game.players.length === 0) games.delete(gameId);
+          if (game.players.length === 0) {
+            games.delete(gameId);
+            io.emit('games:list', getGamesList());
+          }
         }
       }
       users.delete(socket.id);
@@ -247,6 +275,24 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// ===== HELPER FUNKCIJE =====
+function getGamesList() {
+  const list = [...games.values()].map(g => ({
+    id: g.id,
+    name: g.settings.name || 'Sto',
+    players: g.players.map(p => p.displayName),
+    status: g.phase,
+    settings: g.settings
+  }));
+  console.log('📋 Lista igara:', list.length, 'igara');
+  return list;
+}
+
+function updatePlayerList() {
+  const players = [...users.values()].map(u => ({ username: u.username, displayName: u.displayName, online: true }));
+  io.emit('players:list', players);
+}
 
 // ===== GAME FLOW =====
 function startBidding(gameId) {
@@ -344,6 +390,7 @@ function endHand(gameId) {
     if (game.currentTrick >= game.settings.numHands * 10) {
       io.to(gameId).emit('game:ended', { scores: game.scores });
       games.delete(gameId);
+      io.emit('games:list', getGamesList());
     } else { resetHand(gameId); }
   }, 3000);
 }
@@ -444,23 +491,7 @@ function handleBotPlay(gameId, playerIdx, suit, value) {
   else setTimeout(() => processBotPlay(gameId), 700);
 }
 
-function updatePlayerList() {
-  const players = [...users.values()].map(u => ({ username: u.username, displayName: u.displayName, online: true }));
-  io.emit('players:list', players);
-}
-
-function broadcastGameList() {
-  const gameList = [...games.values()].map(g => ({
-    id: g.id,
-    name: g.settings.name || 'Partija',
-    players: g.players.map(p => p.displayName),
-    status: g.phase
-  }));
-  io.emit('games:list', gameList);
-}
-
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 Preferans server running on port ${PORT}`);
-  console.log(`🌐 Open http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
